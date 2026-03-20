@@ -455,15 +455,19 @@ function RecordModal({ onClose }: { onClose: () => void }) {
     { id: 'snack', label: '零食', icon: '🍪' }
   ] as const;
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = (query: string) => {
     setFoodSearch(query);
     setSearchResults(query.length > 0 ? searchFoods(query).slice(0, 6) : []);
 
     if (query.length >= 2) {
       setLoadingNutrition(true);
-      const info = await searchFoodNutrition(query);
-      setNutritionInfo(info);
-      setLoadingNutrition(false);
+      searchFoodNutrition(query).then(info => {
+        setNutritionInfo(info);
+        setLoadingNutrition(false);
+      }).catch(() => {
+        setNutritionInfo(null);
+        setLoadingNutrition(false);
+      });
     } else {
       setNutritionInfo(null);
     }

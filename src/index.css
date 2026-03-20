@@ -535,15 +535,29 @@ body {
   max-height: 200px;
   overflow-y: auto;
   margin-bottom: 16px;
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 100;
 }
 
 .search-result-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 0;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border-light);
   cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.search-result-item:hover {
+  background-color: #FFF7ED;
+}
+
+.search-result-item:active {
+  background-color: #FFEDD5;
 }
 
 .search-result-item .cal {
