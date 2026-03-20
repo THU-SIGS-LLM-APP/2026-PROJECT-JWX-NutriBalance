@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { UserPreferences, FoodItem } from './types';
 import { getPreferences, savePreferences, getDefaultPreferences, getMealRecords, saveMealRecord, deleteMealRecord, getFavorites, toggleFavorite, getTodayMeals } from './utils/storage';
 import { getAIRecommendations, getQuickRecommendations } from './utils/recommendations';
+import { getDeepSeekRecommendations, getFallbackRecommendations } from './utils/deepseek';
 import { searchFoods } from './data/foods';
 import { recipes, getRecipeById } from './data/recipes';
 import { 
@@ -146,6 +147,8 @@ function HomeScreen({ onOpenRecipe, showRecord, setShowRecord }: {
   const [quickFlavor, setQuickFlavor] = useState<string>('');
   const [quickCuisine, setQuickCuisine] = useState<string>('');
   const [recKey, setRecKey] = useState(0);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiReason, setAiReason] = useState<string>('');
   
   const todayMeals = getTodayMeals();
   const tempPrefs = {
@@ -154,8 +157,28 @@ function HomeScreen({ onOpenRecipe, showRecord, setShowRecord }: {
     cuisines: quickCuisine ? [quickCuisine] : preferences.cuisines,
     _seed: recKey
   };
-  const recommendations = getAIRecommendations(preferences, 4);
   const quickRecs = getQuickRecommendations(tempPrefs, 3);
+
+  useEffect(() => {
+    const fetchDeepSeekRecs = async () => {
+      setAiLoading(true);
+      try {
+        const result = await getDeepSeekRecommendations(preferences, 4);
+        setAiReason(result.reason);
+      } catch (error) {
+        console.error('Failed to get DeepSeek recommendations:', error);
+        setAiReason('根据您的偏好推荐');
+      } finally {
+        setAiLoading(false);
+      }
+    };
+
+    fetchDeepSeekRecs();
+  }, [preferences, recKey]);
+
+  const aiRecommendations = aiLoading 
+    ? getFallbackRecommendations(preferences, 4).recipes 
+    : getFallbackRecommendations(preferences, 4).recipes;
 
   const todayNutrition = {
     calories: todayMeals.reduce((sum, m) => sum + m.totalCalories, 0),
@@ -314,12 +337,12 @@ function HomeScreen({ onOpenRecipe, showRecord, setShowRecord }: {
 
       {/* AI Recommendations */}
       <div className="section-header">
-        <h2>智能推荐</h2>
-        <span className="section-desc">{recommendations.reason}</span>
+        <h2>✨ AI智能推荐</h2>
+        <span className="section-desc">{aiLoading ? '思考中...' : aiReason}</span>
       </div>
 
       <div className="recipe-grid-small">
-        {recommendations.recipes.map((recipe, index) => (
+        {aiRecommendations.map((recipe: any, index: number) => (
           <motion.div
             key={recipe.id}
             initial={{ scale: 0.9, opacity: 0 }}
