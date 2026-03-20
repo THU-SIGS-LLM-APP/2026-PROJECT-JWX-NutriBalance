@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/data/foods.ts","./src/data/recipes.ts","./src/utils/recommendations.ts","./src/utils/storage.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/data/foods.ts","./src/data/recipes.ts","./src/utils/deepseek.ts","./src/utils/recommendations.ts","./src/utils/storage.ts"],"version":"5.9.3"}

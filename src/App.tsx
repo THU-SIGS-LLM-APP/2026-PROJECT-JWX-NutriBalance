@@ -1,8 +1,8 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { UserPreferences, FoodItem } from './types';
-import { getPreferences, savePreferences, getDefaultPreferences, getMealRecords, saveMealRecord, deleteMealRecord, getFavorites, toggleFavorite, getTodayMeals } from './utils/storage';
-import { getAIRecommendations, getQuickRecommendations } from './utils/recommendations';
-import { getDeepSeekRecommendations, getFallbackRecommendations } from './utils/deepseek';
+import { getPreferences, savePreferences, getDefaultPreferences, getMealRecords, saveMealRecord, getFavorites, toggleFavorite, getTodayMeals } from './utils/storage';
+import { getQuickRecommendations } from './utils/recommendations';
+import { getDeepSeekRecommendations, getFallbackRecommendations, searchFoodNutrition, getMoreFoodRecommendations, FoodNutritionInfo } from './utils/deepseek';
 import { searchFoods } from './data/foods';
 import { recipes, getRecipeById } from './data/recipes';
 import { 
@@ -149,6 +149,9 @@ function HomeScreen({ onOpenRecipe, showRecord, setShowRecord }: {
   const [recKey, setRecKey] = useState(0);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiReason, setAiReason] = useState<string>('');
+  const [selectedFoodCategory, setSelectedFoodCategory] = useState<string>('');
+  const [foodRecommendations, setFoodRecommendations] = useState<FoodNutritionInfo[]>([]);
+  const [loadingFoods, setLoadingFoods] = useState(false);
   
   const todayMeals = getTodayMeals();
   const tempPrefs = {
@@ -175,6 +178,22 @@ function HomeScreen({ onOpenRecipe, showRecord, setShowRecord }: {
 
     fetchDeepSeekRecs();
   }, [preferences, recKey]);
+
+  useEffect(() => {
+    const fetchFoodRecs = async () => {
+      setLoadingFoods(true);
+      try {
+        const foods = await getMoreFoodRecommendations(preferences, selectedFoodCategory);
+        setFoodRecommendations(foods);
+      } catch (error) {
+        console.error('Failed to get food recommendations:', error);
+      } finally {
+        setLoadingFoods(false);
+      }
+    };
+
+    fetchFoodRecs();
+  }, [preferences, selectedFoodCategory]);
 
   const aiRecommendations = aiLoading 
     ? getFallbackRecommendations(preferences, 4).recipes 
@@ -361,6 +380,58 @@ function HomeScreen({ onOpenRecipe, showRecord, setShowRecord }: {
         ))}
       </div>
 
+      {/* Food Category Filter */}
+      <div className="section-header" style={{ marginTop: 24 }}>
+        <h2>🍎 健康食物推荐</h2>
+      </div>
+
+      <div className="category-filter">
+        {['全部', '水果', '蔬菜', '蛋白质', '主食', '坚果'].map(cat => (
+          <button
+            key={cat}
+            className={selectedFoodCategory === (cat === '全部' ? '' : cat) ? 'active' : ''}
+            onClick={() => setSelectedFoodCategory(cat === '全部' ? '' : cat)}
+          >
+            {cat === '全部' && '🍽️'}
+            {cat === '水果' && '🍎'}
+            {cat === '蔬菜' && '🥬'}
+            {cat === '蛋白质' && '🥩'}
+            {cat === '主食' && '🍚'}
+            {cat === '坚果' && '🥜'}
+            <span>{cat}</span>
+          </button>
+        ))}
+      </div>
+
+      {loadingFoods ? (
+        <div className="loading-text">正在加载推荐...</div>
+      ) : (
+        <div className="food-recommendation-grid">
+          {foodRecommendations.map((food, index) => (
+            <motion.div
+              key={food.name}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: index * 0.05 }}
+              className="food-recommendation-card"
+            >
+              <div className="food-info">
+                <h4>{food.name}</h4>
+                <p className="food-calories">{food.calories} kcal/100g</p>
+                <div className="food-tags">
+                  <span className="food-tag protein">蛋白{food.protein}g</span>
+                  <span className="food-tag carbs">碳水{food.carbs}g</span>
+                  <span className="food-tag fat">脂肪{food.fat}g</span>
+                </div>
+                {food.healthBenefits && (
+                  <p className="food-benefit">✨ {food.healthBenefits}</p>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
       {/* Record Modal */}
       <AnimatePresence>
         {showRecord && <RecordModal onClose={() => setShowRecord(false)} />}
@@ -374,6 +445,8 @@ function RecordModal({ onClose }: { onClose: () => void }) {
   const [foodSearch, setFoodSearch] = useState('');
   const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
   const [selectedFoods, setSelectedFoods] = useState<{ food: FoodItem; servings: number }[]>([]);
+  const [nutritionInfo, setNutritionInfo] = useState<FoodNutritionInfo | null>(null);
+  const [loadingNutrition, setLoadingNutrition] = useState(false);
 
   const mealTypes = [
     { id: 'breakfast', label: '早餐', icon: '🌅' },
@@ -382,9 +455,18 @@ function RecordModal({ onClose }: { onClose: () => void }) {
     { id: 'snack', label: '零食', icon: '🍪' }
   ] as const;
 
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     setFoodSearch(query);
     setSearchResults(query.length > 0 ? searchFoods(query).slice(0, 6) : []);
+
+    if (query.length >= 2) {
+      setLoadingNutrition(true);
+      const info = await searchFoodNutrition(query);
+      setNutritionInfo(info);
+      setLoadingNutrition(false);
+    } else {
+      setNutritionInfo(null);
+    }
   };
 
   const addFood = (food: FoodItem) => {
@@ -479,6 +561,58 @@ function RecordModal({ onClose }: { onClose: () => void }) {
                 <span className="cal">{food.calories}kcal</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {loadingNutrition && (
+          <div className="nutrition-loading">正在获取营养信息...</div>
+        )}
+
+        {nutritionInfo && (
+          <div className="nutrition-info-card">
+            <h4>🥗 {nutritionInfo.name} 营养信息</h4>
+            <div className="nutrition-grid">
+              <div className="nutrition-item">
+                <span className="label">热量</span>
+                <span className="value">{nutritionInfo.calories} kcal</span>
+              </div>
+              <div className="nutrition-item">
+                <span className="label">蛋白质</span>
+                <span className="value">{nutritionInfo.protein}g</span>
+              </div>
+              <div className="nutrition-item">
+                <span className="label">碳水</span>
+                <span className="value">{nutritionInfo.carbs}g</span>
+              </div>
+              <div className="nutrition-item">
+                <span className="label">脂肪</span>
+                <span className="value">{nutritionInfo.fat}g</span>
+              </div>
+              <div className="nutrition-item">
+                <span className="label">纤维</span>
+                <span className="value">{nutritionInfo.fiber}g</span>
+              </div>
+            </div>
+            {nutritionInfo.vitamins.length > 0 && (
+              <div className="nutrition-detail">
+                <span>💊 维生素: {nutritionInfo.vitamins.join(', ')}</span>
+              </div>
+            )}
+            {nutritionInfo.minerals.length > 0 && (
+              <div className="nutrition-detail">
+                <span>⚡ 矿物质: {nutritionInfo.minerals.join(', ')}</span>
+              </div>
+            )}
+            {nutritionInfo.healthBenefits && (
+              <div className="nutrition-detail benefit">
+                <span>✨ {nutritionInfo.healthBenefits}</span>
+              </div>
+            )}
+            {nutritionInfo.cautions && (
+              <div className="nutrition-detail caution">
+                <span>⚠️ {nutritionInfo.cautions}</span>
+              </div>
+            )}
           </div>
         )}
 
